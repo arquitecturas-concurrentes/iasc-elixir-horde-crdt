@@ -134,5 +134,4 @@ defmodule IASC.DeltaCRDT do
   end
 end
 
-
 # IASC.DeltaCRDT.spawn_crdt

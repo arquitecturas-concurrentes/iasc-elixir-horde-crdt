@@ -81,12 +81,16 @@ defmodule IASC.LocalCRDTRegistryClient do
   def current_node_registry do
     build_crdt_registry_name(Random.current_node)
   end
+
+  def get_state_of_all_crdts_in_cluster do
+    Enum.map(get_all_crtds_clients_cluster, fn a -> IASC.DeltaCRDT.get_map(a) end)
+  end
 end
 
 # IASC.LocalCRDTRegistryClient.get_all_crdt_pids_node("node3")
 # IASC.LocalCRDTRegistryClient.get_all_global_registries
-# Enum.first(IASC.LocalCRDTRegistryClient.get_all_crtds_clients_cluster)
 
-# node_name = IASC.LocalCRDTRegistryClient.build_crdt_registry_name("observer")
-# :global.whereis_name(node_name)
-# Enum.flat_map(a, fn crdt_client -> GenServer.call(crdt_client, :get_crdt) end)
+# client = List.first(IASC.LocalCRDTRegistryClient.get_all_crtds_clients_cluster)
+# GenServer.cast(client, {:put, "a", 2})
+# IASC.LocalCRDTRegistryClient.get_state_of_all_crdts_in_cluster
+
