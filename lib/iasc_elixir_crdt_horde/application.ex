@@ -25,6 +25,9 @@ defmodule IascElixirCrdtHorde.Application do
       IASC.LocalCRDTRegistry.Supervisor
     ]
 
+    # Start the IASC Telemetry Instrumenter
+    IASC.Telemetry.Instrumenter.setup()
+
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: IascElixirCrdtHorde.Supervisor]

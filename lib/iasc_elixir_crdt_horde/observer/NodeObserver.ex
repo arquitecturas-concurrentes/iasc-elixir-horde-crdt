@@ -21,7 +21,11 @@ defmodule IASCCustom.NodeObserver do
   Handler that will be called when a node has left the cluster.
   """
   def handle_info({:nodedown, node, _node_type}, state) do
-    Logger.info("---- Node down: #{node} ----")
+    :telemetry.execute(
+      [:node, :event, :down],
+      %{node_affected: node},
+      %{}
+    )
     set_members(HordeRegistry)
     set_members(HordeSupervisor)
 
@@ -33,7 +37,11 @@ defmodule IASCCustom.NodeObserver do
   Handler that will be called when a node has joined the cluster.
   """
   def handle_info({:nodeup, node, _node_type}, state) do
-    Logger.info("---- Node up: #{node} ----")
+    :telemetry.execute(
+      [:node, :event, :up],
+      %{node_affected: node},
+      %{}
+    )
     set_members(HordeRegistry)
     set_members(HordeSupervisor)
 

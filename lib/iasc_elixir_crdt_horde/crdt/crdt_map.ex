@@ -32,8 +32,22 @@ defmodule IASC.DeltaCRDT do
     {:ok, crdt} = DeltaCrdt.start_link(DeltaCrdt.AWLWWMap, sync_interval: 3)
     
     register(crdt, name)
+    set_neighbours(crdt)
 
     {:ok, {name, crdt}}
+  end
+
+  @impl GenServer
+  def handle_cast({:register, other_pids}, {name, crdt}) do
+    pids_diff = List.delete(other_pids, crdt)
+    :telemetry.execute(
+      [:iasc_crdt, :neighbours, :setup],
+      %{from: crdt, to: pids_diff, node: Node.self},
+      %{}
+    )
+    DeltaCrdt.set_neighbours(crdt, pids_diff)
+
+    {:noreply, {name, crdt}}
   end
 
   @impl GenServer
@@ -48,6 +62,22 @@ defmodule IASC.DeltaCRDT do
     {:reply, DeltaCrdt.to_map(crdt), {name, crdt}}
   end
 
+
+  @impl GenServer
+  def handle_call(:get_crdt, _from, {name, crdt}) do
+    {:reply, crdt, {name, crdt}}
+  end
+
+  @impl GenServer
+  def handle_cast({:update_crdt_neighbour, new_pid}, {name, crdt}) do
+    crdt_state = :sys.get_state(crdt)
+    current_neighbours = crdt_state.neighbours
+    all_crdts = MapSet.put(current_neighbours, new_pid)
+    GenServer.cast(self(), {:register, MapSet.to_list(all_crdts)})
+
+    {:noreply, {name, crdt}}
+  end
+  
   # --- Client functions --- #
 
   def spawn_crdt() do
@@ -63,6 +93,22 @@ defmodule IASC.DeltaCRDT do
   end
 
   # ---- Private methods ---- #
+
+  defp set_neighbours(crdt_pid) do
+    Logger.info("#{inspect(all_crdt_clients_but_me)}")
+    all_crdts = Enum.map(all_crdt_clients_but_me, fn crdt_client -> GenServer.call(crdt_client, :get_crdt) end)
+
+    case all_crdts do
+      []-> :ok # first crdt, dont do anything.
+      crdts ->
+        GenServer.cast(self(), {:register, crdts})
+        IASC.LocalCRDTRegistryClient.notify_new_crdt(all_crdt_clients_but_me, crdt_pid)
+    end  
+  end
+
+  defp all_crdt_clients_but_me do
+    List.delete(IASC.LocalCRDTRegistryClient.get_all_crtds_clients_cluster, self)
+  end
 
   defp register(crdt_pid, name) do
     register_local_name(name)
@@ -87,3 +133,6 @@ defmodule IASC.DeltaCRDT do
     "deltacrdt-#{random_string}"
   end
 end
+
+
+# IASC.DeltaCRDT.spawn_crdt

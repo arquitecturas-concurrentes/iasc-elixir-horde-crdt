@@ -10,12 +10,19 @@ defmodule IASC.LocalCRDTRegistryClient do
 
   def start_link(_)do
     Logger.info("---- Starting #{__MODULE__} ----")
-    GenServer.start_link(__MODULE__, %{}, name: {:global, current_node_registry})
+    node_name = current_node_registry
+    GenServer.start_link(__MODULE__, %{name: node_name}, name: {:global, node_name})
   end
 
   @impl GenServer
-  def init(state) do
-    {:ok, state}
+  def init(%{name: name}) do
+    :telemetry.execute(
+      [:iasc_crdt, :registry, :up],
+      %{registry_name: name, node: Node.self},
+      %{}
+    )
+
+    {:ok, {}}
   end
 
   @impl GenServer
@@ -25,7 +32,11 @@ defmodule IASC.LocalCRDTRegistryClient do
 
   @impl GenServer
   def handle_cast({:add_crdt_pid, pid}, state) do
-    Log.info("#{__MODULE__} Adding pid #{pid}")
+    :telemetry.execute(
+      [:iasc_crdt, :crdt, :new],
+      %{pid: pid},
+      %{}
+    )
 
     {:noreply, state}
   end
@@ -40,17 +51,31 @@ defmodule IASC.LocalCRDTRegistryClient do
 
   # --- Client functions --- #
 
+  def notify_new_crdt(client_crdts, crdt_pid) do
+    Enum.map(client_crdts, fn crdt_client -> 
+      GenServer.cast(crdt_client, {:update_crdt_neighbour, crdt_pid}) 
+    end)
+  end
+
   def build_crdt_registry_name(node_name) do
     String.to_atom("LocalCRDTRegistry#{node_name}")
   end
 
   def get_all_crdt_pids_node(node_name) do
     pid = :global.whereis_name(build_crdt_registry_name(node_name))
-    GenServer.call(pid, :get_crdt_pids)
+    case pid do
+      :undefined -> []
+      pid -> GenServer.call(pid, :get_crdt_pids)
+    end
+
   end
 
-  def get_all_crtds_cluster do
+  def get_all_crtds_clients_cluster do
     Enum.flat_map(Random.cluster_nodes(), fn node_name -> get_all_crdt_pids_node(node_name) end)
+  end
+
+  def get_all_global_registries do
+    Enum.map(Random.cluster_nodes(), fn node_name -> build_crdt_registry_name(node_name) end)
   end
 
   def current_node_registry do
@@ -59,4 +84,9 @@ defmodule IASC.LocalCRDTRegistryClient do
 end
 
 # IASC.LocalCRDTRegistryClient.get_all_crdt_pids_node("node3")
-# IASC.LocalCRDTRegistryClient.get_all_crtds_cluster
+# IASC.LocalCRDTRegistryClient.get_all_global_registries
+# Enum.first(IASC.LocalCRDTRegistryClient.get_all_crtds_clients_cluster)
+
+# node_name = IASC.LocalCRDTRegistryClient.build_crdt_registry_name("observer")
+# :global.whereis_name(node_name)
+# Enum.flat_map(a, fn crdt_client -> GenServer.call(crdt_client, :get_crdt) end)
